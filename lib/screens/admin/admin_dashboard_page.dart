@@ -10,7 +10,9 @@ import '../../auth/auth_service.dart';
 import '../../auth/login_screen.dart';
 
 class AdminDashboardPage extends StatefulWidget {
-  const AdminDashboardPage({super.key});
+  final VoidCallback? onLogout;
+
+  const AdminDashboardPage({super.key, this.onLogout});
 
   @override
   State<AdminDashboardPage> createState() => _AdminDashboardPageState();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/database_service.dart';
 import '../service_quotations/service_quotations_page.dart';
 
 class ServiceRequestDetailPage extends StatefulWidget {
@@ -23,7 +24,7 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage>
   late Animation<Offset> _slideAnimation;
 
   // Datos de muestra para cotizaciones
-  late List<Map<String, dynamic>> quotations;
+  List<Map<String, dynamic>> quotations = [];
 
   // Datos de muestra para técnico asignado
   Map<String, dynamic>? assignedTechnician;
@@ -56,47 +57,64 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage>
     _fadeController.forward();
     _slideController.forward();
 
-    _initializeSampleData();
+    _loadRequestDataFromDatabase();
   }
 
-  void _initializeSampleData() {
-    // Inicializar cotizaciones de muestra
-    quotations = [
-      {
-        'id': '1',
-        'tecnico_nombre': 'Carlos Martínez',
-        'especialidad': 'Carpintería',
-        'monto': 150000,
-        'descripcion': 'Trabajo limpio y a tiempo',
-        'rating': 4.8,
-        'fecha': DateTime.now().subtract(const Duration(days: 3)),
-        'estado': 'aceptada',
-      },
-      {
-        'id': '2',
-        'tecnico_nombre': 'Diana López',
-        'especialidad': 'Electricidad',
-        'monto': 120000,
-        'descripcion': 'Experiencia garantizada',
-        'rating': 4.5,
-        'fecha': DateTime.now().subtract(const Duration(days: 2)),
-        'estado': 'pendiente',
-      },
-    ];
+  Future<void> _loadRequestDataFromDatabase() async {
+    try {
+      // Cargar cotizaciones reales desde Supabase
+      final quotationsData = await DatabaseService.getQuotesForRequest(
+        widget.request['id'],
+      );
 
-    // Asignar técnico si la solicitud está asignada
-    if (widget.request['estado'] == 'asignado') {
-      assignedTechnician = {
-        'id': '1',
-        'nombre': 'Carlos Martínez',
-        'especialidad': 'Carpintería',
-        'foto_url': 'https://via.placeholder.com/150/555879/FFFFFF?text=Carlos',
-        'teléfono': '+57 300 1234567',
-        'email': 'carlos.martinez@example.com',
-        'rating': 4.8,
-        'votos': 156,
-        'experiencia_anos': 8,
-      };
+      setState(() {
+        quotations = quotationsData;
+      });
+
+      // Si la solicitud está asignada, obtener datos del técnico
+      if (widget.request['estado'] == 'asignado' && quotationsData.isNotEmpty) {
+        // Buscar la cotización aceptada
+        final acceptedQuote = quotationsData.firstWhere(
+          (q) => q['estado'] == 'aceptada',
+          orElse: () => quotationsData.first,
+        );
+
+        if (acceptedQuote['technician_id'] != null) {
+          final techProfile = await DatabaseService.getTechnicianProfile(
+            acceptedQuote['technician_id'],
+          );
+
+          if (techProfile != null) {
+            setState(() {
+              assignedTechnician = {
+                'id': techProfile['id'],
+                'nombre': techProfile['users']?['nombre_completo'] ?? 'Técnico',
+                'especialidad': 'Ver especialidades',
+                'foto_url': techProfile['users']?['avatar_url'],
+                'teléfono': techProfile['users']?['telefono'] ?? '',
+                'email': techProfile['users']?['email'] ?? '',
+                'rating': techProfile['rating_promedio'] ?? 0.0,
+                'votos': techProfile['total_reviews'] ?? 0,
+                'experiencia_anos': techProfile['anios_experiencia'] ?? 0,
+              };
+            });
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar datos: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      // En caso de error, usar listas vacías
+      setState(() {
+        quotations = [];
+        assignedTechnician = null;
+      });
     }
   }
 
@@ -156,20 +174,30 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage>
     }
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
+  String _formatDate(dynamic dateValue) {
+    if (dateValue == null) return 'Fecha no disponible';
 
-    if (difference.inDays == 0) {
-      return 'Hoy';
-    } else if (difference.inDays == 1) {
-      return 'Ayer';
-    } else if (difference.inDays < 7) {
-      return 'Hace ${difference.inDays}d';
-    } else if (difference.inDays < 30) {
-      return 'Hace ${(difference.inDays / 7).ceil()}s';
-    } else {
-      return 'Hace ${(difference.inDays / 30).ceil()}m';
+    try {
+      final DateTime date = dateValue is DateTime
+          ? dateValue
+          : DateTime.parse(dateValue.toString());
+
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays == 0) {
+        return 'Hoy';
+      } else if (difference.inDays == 1) {
+        return 'Ayer';
+      } else if (difference.inDays < 7) {
+        return 'Hace ${difference.inDays}d';
+      } else if (difference.inDays < 30) {
+        return 'Hace ${(difference.inDays / 7).ceil()}s';
+      } else {
+        return 'Hace ${(difference.inDays / 30).ceil()}m';
+      }
+    } catch (e) {
+      return dateValue.toString();
     }
   }
 

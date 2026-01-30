@@ -57,15 +57,34 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
 
   Future<void> _loadRequests() async {
     setState(() => _isLoading = true);
-    
+
     try {
       // Cargar solicitudes disponibles (estado = 'solicitud')
       final requests = await DatabaseService.getAvailableRequests();
-      
+
       // Cargar especialidades para los filtros
       final specialties = await DatabaseService.getSpecialties();
-      final filters = ['todas', ...specialties.map((s) => s['nombre'] as String)];
-      
+
+      // Categorías de servicio disponibles
+      final categories = [
+        'Electricidad',
+        'Plomería',
+        'Carpintería',
+        'Pintura',
+        'Electrodomésticos',
+        'Climatización',
+        'Cerrajería',
+        'Otros',
+      ];
+
+      // Combinar filtros únicos
+      final filters = [
+        'todas',
+        ...categories,
+        ...specialties.map((s) => s['nombre'] as String),
+      ];
+      final uniqueFilters = filters.toSet().toList();
+
       if (mounted) {
         setState(() {
           _requests = requests.map((r) {
@@ -74,14 +93,23 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
             return {
               ...r,
               'cliente_nombre': cliente?['nombre_completo'] ?? 'Cliente',
-              'cliente_foto': cliente?['avatar_url'] ?? 'https://via.placeholder.com/150/555879/FFFFFF?text=U',
-              'fecha': r['created_at'] != null ? DateTime.parse(r['created_at']) : DateTime.now(),
-              'especialidad': r['especialidad'] ?? 'General',
+              'cliente_foto':
+                  cliente?['avatar_url'] ??
+                  'https://via.placeholder.com/150/555879/FFFFFF?text=U',
+              'fecha': r['created_at'] != null
+                  ? DateTime.parse(r['created_at'])
+                  : DateTime.now(),
+              'categoria': r['categoria'] ?? 'General',
+              'especialidad': r['especialidad'] ?? r['categoria'] ?? 'General',
+              'descripcion': r['descripcion_problema'] ?? 'Sin descripción',
               'distancia': 0.0, // Se calcularía con geolocalización
               'cotizaciones_recibidas': 0, // Se obtendría de la tabla quotes
+              'presupuesto_cliente': r['presupuesto_cliente'] ?? 10.0,
+              'necesita_chequeo': r['necesita_chequeo'] ?? false,
+              'imagen_url': r['imagen_url'],
             };
           }).toList();
-          _specialtyFilters = filters;
+          _specialtyFilters = uniqueFilters;
           _isLoading = false;
         });
       }
@@ -124,7 +152,12 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
 
   List<Map<String, dynamic>> get _filteredRequests {
     if (_selectedFilter == 'todas') return _requests;
-    return _requests.where((r) => r['especialidad'].toLowerCase() == _selectedFilter.toLowerCase()).toList();
+    return _requests
+        .where(
+          (r) =>
+              r['especialidad'].toLowerCase() == _selectedFilter.toLowerCase(),
+        )
+        .toList();
   }
 
   void _sendQuotation(Map<String, dynamic> request) {
@@ -156,7 +189,10 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
                 child: _filteredRequests.isEmpty
                     ? _buildEmptyState()
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         itemCount: _filteredRequests.length,
                         itemBuilder: (context, index) {
                           return _buildRequestCard(_filteredRequests[index]);
@@ -188,10 +224,7 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: _loadRequests,
-        ),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _loadRequests),
       ],
     );
   }
@@ -226,7 +259,9 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
                 selectedColor: const Color(0xFF555879),
                 checkmarkColor: Colors.white,
                 side: BorderSide(
-                  color: isSelected ? const Color(0xFF555879) : const Color(0xFF98A1BC),
+                  color: isSelected
+                      ? const Color(0xFF555879)
+                      : const Color(0xFF98A1BC),
                 ),
               ),
             );
@@ -271,13 +306,24 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
   }
 
   Widget _buildRequestCard(Map<String, dynamic> request) {
+    final needsCheckup = request['necesita_chequeo'] == true;
+    final budget = request['presupuesto_cliente'] ?? 0.0;
+    final category =
+        request['categoria'] ?? request['especialidad'] ?? 'General';
+    final hasImage = request['imagen_url'] != null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.85),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF98A1BC), width: 1.5),
+        border: Border.all(
+          color: needsCheckup
+              ? const Color(0xFFF39C12)
+              : const Color(0xFF98A1BC),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF555879).withOpacity(0.08),
@@ -289,7 +335,7 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Encabezado
+          // Encabezado con cliente y categoría
           Row(
             children: [
               Container(
@@ -335,13 +381,16 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF555879).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  request['especialidad'],
+                  category,
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -352,19 +401,82 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
               ),
             ],
           ),
+
+          // Badge de chequeo si aplica
+          if (needsCheckup) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3E0),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFF39C12)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.search, size: 14, color: Color(0xFFF39C12)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Solicitud de Chequeo (\$5.00)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFF39C12),
+                      fontFamily: 'Montserrat',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           const SizedBox(height: 12),
-          // Descripcion
+
+          // Descripción
           Text(
-            request['descripcion'],
+            request['descripcion_problema'] ??
+                request['descripcion'] ??
+                'Sin descripción',
             style: const TextStyle(
               fontSize: 14,
               color: Color(0xFF555879),
               fontFamily: 'Montserrat',
               height: 1.4,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
+
+          // Imagen si existe
+          if (hasImage) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                request['imagen_url'],
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 120,
+                    color: const Color(0xFFDED3C4).withOpacity(0.3),
+                    child: const Center(
+                      child: Icon(
+                        Icons.image_not_supported,
+                        color: Color(0xFF98A1BC),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+
           const SizedBox(height: 12),
-          // Direccion
+
+          // Dirección y distancia
           Row(
             children: [
               const Icon(Icons.location_on, size: 16, color: Color(0xFF98A1BC)),
@@ -377,8 +489,11 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
                     color: Color(0xFF98A1BC),
                     fontFamily: 'Montserrat',
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '${request['distancia']} km',
                 style: const TextStyle(
@@ -390,13 +505,47 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
               ),
             ],
           ),
+
           const SizedBox(height: 16),
           Container(height: 1, color: const Color(0xFFDED3C4)),
           const SizedBox(height: 12),
-          // Footer
+
+          // Footer con presupuesto y botón
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Presupuesto del cliente
+              if (!needsCheckup)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF27AE60).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.attach_money,
+                        size: 16,
+                        color: Color(0xFF27AE60),
+                      ),
+                      Text(
+                        'Base: \$${budget.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF27AE60),
+                          fontFamily: 'Montserrat',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Cotizaciones recibidas
               Row(
                 children: [
                   const Icon(Icons.people, size: 16, color: Color(0xFF98A1BC)),
@@ -411,12 +560,17 @@ class _AvailableRequestsPageState extends State<AvailableRequestsPage>
                   ),
                 ],
               ),
+
+              // Botón de cotizar
               ElevatedButton.icon(
                 onPressed: () => _sendQuotation(request),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF555879),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

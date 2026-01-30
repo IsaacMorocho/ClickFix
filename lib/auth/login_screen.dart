@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/app_colors.dart';
 import '../main.dart' show isManualLogin;
+import '../services/database_service.dart';
 import 'auth_service.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
@@ -12,8 +12,9 @@ import 'widgets/auth_layout.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? confirmationMessage;
+  final Function(String role)? onLoginSuccess;
 
-  const LoginScreen({super.key, this.confirmationMessage});
+  const LoginScreen({super.key, this.confirmationMessage, this.onLoginSuccess});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -56,30 +57,46 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       setState(() => _loading = true);
 
-      // Marcar como login manual para evitar que AuthGate desloguee
+      // Marcar como login manual
       isManualLogin = true;
 
-      await _authService.login(
+      // Login real con Supabase
+      final response = await _authService.login(
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text.trim(),
       );
-    } on AuthException catch (e) {
-      _showError(_mapAuthError(e.message));
-    } catch (_) {
-      _showError('Error al iniciar sesion');
+
+      if (mounted && response.user != null) {
+        // Guardar ID de usuario
+        DatabaseService.setCurrentUserId(response.user!['id']);
+
+        // Intentar obtener rol del perfil de usuario
+        String role = 'cliente'; // Default
+        try {
+          final profile = await DatabaseService.getCurrentUserProfile();
+          role = profile?['rol'] as String? ?? 'cliente';
+        } catch (e) {
+          // Si falla la consulta a public.users, usar metadatos de auth
+          print(
+            'No se pudo obtener perfil de public.users, usando metadatos: $e',
+          );
+          final metadata = response.user!['user_metadata'];
+          if (metadata != null && metadata is Map) {
+            role = metadata['rol']?.toString() ?? 'cliente';
+          }
+        }
+
+        if (widget.onLoginSuccess != null) {
+          widget.onLoginSuccess!(role);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError(e.toString());
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  String _mapAuthError(String message) {
-    if (message.contains('Invalid login credentials')) {
-      return 'Correo o contraseña incorrectos';
-    }
-    if (message.contains('Email not confirmed')) {
-      return 'Debes confirmar tu correo electronico';
-    }
-    return message;
   }
 
   void _showError(String msg) {
@@ -324,7 +341,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const ForgotPasswordScreen(),
+                                    builder: (_) =>
+                                        const ForgotPasswordScreen(),
                                   ),
                                 );
                               },
@@ -348,7 +366,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF555879),
                                 foregroundColor: Colors.white,
-                                disabledBackgroundColor: const Color(0xFF98A1BC),
+                                disabledBackgroundColor: const Color(
+                                  0xFF98A1BC,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),

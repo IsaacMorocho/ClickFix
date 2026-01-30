@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/database_service.dart';
 
 class ServiceQuotationsPage extends StatefulWidget {
   final String serviceRequestId;
@@ -56,61 +57,33 @@ class _ServiceQuotationsPageState extends State<ServiceQuotationsPage>
     _fadeController.forward();
     _slideController.forward();
 
-    _initializeSampleData();
+    _loadQuotationsFromDatabase();
   }
 
-  void _initializeSampleData() {
-    // TODO: Obtener de Supabase usando service_request_id
-    quotations = [
-      {
-        'id': 'quote_1',
-        'technician_id': 'tech_1',
-        'tecnico_nombre': 'Carlos Martínez',
-        'especialidad': 'Carpintería',
-        'foto_url': 'https://via.placeholder.com/150/555879/FFFFFF?text=Carlos',
-        'rating': 4.8,
-        'votos': 156,
-        'precio': 150000,
-        'mensaje':
-            'Trabajo de excelente calidad. Tengo disponibilidad este fin de semana. Incluye materiales de primera calidad.',
-        'estado': 'pendiente',
-        'created_at': DateTime.now().subtract(const Duration(days: 2)),
-        'teléfono': '+57 300 1234567',
-        'experiencia_anos': 8,
-      },
-      {
-        'id': 'quote_2',
-        'technician_id': 'tech_2',
-        'tecnico_nombre': 'Diana López',
-        'especialidad': 'Electricidad',
-        'foto_url': 'https://via.placeholder.com/150/98A1BC/FFFFFF?text=Diana',
-        'rating': 4.5,
-        'votos': 89,
-        'precio': 120000,
-        'mensaje':
-            'Experiencia garantizada. Puedo hacer el trabajo mañana. Precio competitivo en el mercado.',
-        'estado': 'pendiente',
-        'created_at': DateTime.now().subtract(const Duration(days: 1)),
-        'teléfono': '+57 301 9876543',
-        'experiencia_anos': 6,
-      },
-      {
-        'id': 'quote_3',
-        'technician_id': 'tech_3',
-        'tecnico_nombre': 'Juan Rodríguez',
-        'especialidad': 'Construcción',
-        'foto_url': 'https://via.placeholder.com/150/DED3C4/555879?text=Juan',
-        'rating': 4.2,
-        'votos': 42,
-        'precio': 200000,
-        'mensaje':
-            'Experiencia en proyectos grandes. Disponible la próxima semana.',
-        'estado': 'pendiente',
-        'created_at': DateTime.now(),
-        'teléfono': '+57 302 5555555',
-        'experiencia_anos': 12,
-      },
-    ];
+  Future<void> _loadQuotationsFromDatabase() async {
+    try {
+      // Cargar cotizaciones reales desde Supabase
+      final quotationsData = await DatabaseService.getQuotesForRequest(
+        widget.serviceRequestId,
+      );
+
+      setState(() {
+        quotations = quotationsData;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar cotizaciones: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      // En caso de error, usar lista vacía
+      setState(() {
+        quotations = [];
+      });
+    }
   }
 
   @override

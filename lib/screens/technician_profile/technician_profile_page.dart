@@ -105,7 +105,7 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
         _technicianId = technicianProfile['id']?.toString();
 
         _originalData = {
-          'nombres_completos': userProfile['nombre_completo']?.toString() ?? '',
+          'nombre_completo': userProfile['nombre_completo']?.toString() ?? '',
           'años_experiencia': technicianProfile['anios_experiencia'] ?? 0,
           'descripcion_profesional':
               technicianProfile['descripcion_profesional']?.toString() ?? '',
@@ -123,7 +123,7 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
         _currentData = Map.from(_originalData);
 
         // Actualizar controladores con valores seguros
-        _nombresController.text = (_currentData['nombres_completos'] ?? '')
+        _nombresController.text = (_currentData['nombre_completo'] ?? '')
             .toString();
         _experienciaController.text = (_currentData['años_experiencia'] ?? 0)
             .toString();
@@ -139,7 +139,7 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
       } else {
         // Si no hay perfil de técnico, mostrar valores predeterminados
         _originalData = {
-          'nombres_completos':
+          'nombre_completo':
               userProfile?['nombre_completo']?.toString() ?? 'Usuario',
           'años_experiencia': 0,
           'descripcion_profesional': 'Sin descripción',
@@ -153,7 +153,7 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
         };
         _currentData = Map.from(_originalData);
 
-        _nombresController.text = _originalData['nombres_completos'].toString();
+        _nombresController.text = _originalData['nombre_completo'].toString();
         _experienciaController.text = '0';
         _descripcionController.text = _originalData['descripcion_profesional']
             .toString();
@@ -205,6 +205,7 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
   Future<void> _pickImage() async {
     final XFile? image = await _imagePicker.pickImage(
       source: ImageSource.gallery,
+      imageQuality: 80,
     );
     if (image != null) {
       setState(() {
@@ -217,12 +218,163 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
   Future<void> _takePhoto() async {
     final XFile? photo = await _imagePicker.pickImage(
       source: ImageSource.camera,
+      imageQuality: 80,
     );
     if (photo != null) {
       setState(() {
         _selectedImage = File(photo.path);
       });
     }
+  }
+
+  /// Eliminar foto de perfil
+  Future<void> _deletePhoto() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.orange, size: 28),
+            SizedBox(width: 12),
+            Text('Eliminar Foto', style: TextStyle(fontFamily: 'Montserrat')),
+          ],
+        ),
+        content: const Text(
+          '¿Estás seguro de que quieres eliminar tu foto de perfil?',
+          style: TextStyle(fontFamily: 'Montserrat'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      // TODO: Eliminar foto del storage del backend
+      // if (_userId != null) {
+      //   await DatabaseService.deleteAvatar(_userId!, 'jpg');
+      // }
+
+      setState(() {
+        _selectedImage = null;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto eliminada correctamente'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Mostrar opciones de foto
+  void _showPhotoOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Foto de Perfil',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Montserrat',
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF555879).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.photo_library,
+                  color: Color(0xFF555879),
+                ),
+              ),
+              title: const Text(
+                'Elegir de la galería',
+                style: TextStyle(fontFamily: 'Montserrat'),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage();
+              },
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF555879).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.camera_alt, color: Color(0xFF555879)),
+              ),
+              title: const Text(
+                'Tomar foto',
+                style: TextStyle(fontFamily: 'Montserrat'),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _takePhoto();
+              },
+            ),
+            if (_selectedImage != null || _currentData['avatar_url'] != null)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.delete, color: Colors.red),
+                ),
+                title: const Text(
+                  'Eliminar foto',
+                  style: TextStyle(fontFamily: 'Montserrat', color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deletePhoto();
+                },
+              ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Iniciar modo edición
@@ -238,7 +390,7 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
       _isEditing = false;
       _selectedImage = null;
       _currentData = Map.from(_originalData);
-      _nombresController.text = (_currentData['nombres_completos'] ?? '')
+      _nombresController.text = (_currentData['nombre_completo'] ?? '')
           .toString();
       _experienciaController.text = (_currentData['años_experiencia'] ?? 0)
           .toString();
@@ -448,7 +600,11 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
         children: [
           // Foto de perfil
           GestureDetector(
-            onTap: _isEditing ? null : null,
+            onTap: () {
+              if (!_isEditing) {
+                _showPhotoOptions();
+              }
+            },
             child: Stack(
               children: [
                 Container(
@@ -470,84 +626,68 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
                     ],
                   ),
                   child: _selectedImage != null
-                      ? CircleAvatar(
-                          backgroundImage: FileImage(_selectedImage!),
+                      ? ClipOval(
+                          child: Image.file(
+                            _selectedImage!,
+                            fit: BoxFit.cover,
+                            width: 120,
+                            height: 120,
+                          ),
                         )
                       : const Center(
-                          child: Text(
-                            'CAM',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Montserrat',
-                            ),
+                          child: Icon(
+                            Icons.person,
+                            size: 60,
+                            color: Colors.white,
                           ),
                         ),
                 ),
-                if (_isEditing)
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
+                // Botón de editar foto (siempre visible)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: GestureDetector(
+                    onTap: _showPhotoOptions,
                     child: Container(
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
                         color: const Color(0xFF98A1BC),
                         shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF555879).withOpacity(0.2),
+                            color: const Color(0xFF555879).withOpacity(0.3),
                             blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                      child: PopupMenuButton<String>(
-                        onSelected: (String value) {
-                          if (value == 'gallery') {
-                            _pickImage();
-                          } else if (value == 'camera') {
-                            _takePhoto();
-                          }
-                        },
-                        itemBuilder: (BuildContext context) =>
-                            <PopupMenuEntry<String>>[
-                              const PopupMenuItem<String>(
-                                value: 'gallery',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.photo_library),
-                                    SizedBox(width: 8),
-                                    Text('Galería'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem<String>(
-                                value: 'camera',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.camera_alt),
-                                    SizedBox(width: 8),
-                                    Text('Cámara'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                        child: const Icon(
-                          Icons.add_a_photo,
-                          color: Colors.white,
-                          size: 18,
-                        ),
+                      child: const Icon(
+                        Icons.camera_alt,
+                        color: Colors.white,
+                        size: 20,
                       ),
                     ),
                   ),
+                ),
               ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Texto informativo
+          Text(
+            'Toca para cambiar foto',
+            style: TextStyle(
+              fontSize: 12,
+              color: const Color(0xFF98A1BC).withOpacity(0.8),
+              fontFamily: 'Montserrat',
             ),
           ),
           const SizedBox(height: 16),
           // Nombre y especialidad
           Text(
-            (_currentData['nombres_completos'] ?? 'Usuario').toString(),
+            (_currentData['nombre_completo'] ?? 'Usuario').toString(),
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -612,7 +752,7 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage>
           // El nombre no se puede editar (está en auth metadata)
           _buildInfoField(
             label: 'Nombres Completos',
-            value: (_currentData['nombres_completos'] ?? 'Usuario').toString(),
+            value: (_currentData['nombre_completo'] ?? 'Usuario').toString(),
           ),
           if (_isEditing)
             const Padding(

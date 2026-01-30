@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../services/database_service.dart';
 
 class ServiceInProgressPage extends StatefulWidget {
-  const ServiceInProgressPage({super.key});
+  final String? serviceId;
+
+  const ServiceInProgressPage({super.key, this.serviceId});
 
   @override
   State<ServiceInProgressPage> createState() => _ServiceInProgressPageState();
@@ -18,8 +21,8 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  late Map<String, dynamic> service;
-  late Map<String, dynamic> technician;
+  Map<String, dynamic>? service;
+  Map<String, dynamic>? technician;
 
   @override
   void initState() {
@@ -49,36 +52,76 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
     _fadeController.forward();
     _slideController.forward();
 
-    _initializeSampleData();
+    _loadServiceDataFromDatabase();
   }
 
-  void _initializeSampleData() {
-    // TODO: Obtener de Supabase usando service_id
-    service = {
-      'id': 'service_1',
-      'service_request_id': 'sr_1',
-      'technician_id': 'tech_1',
-      'quote_id': 'quote_1',
-      'fecha_inicio': DateTime.now().subtract(const Duration(hours: 2)),
-      'fecha_fin': DateTime.now().add(const Duration(hours: 4)),
-      'estado': 'en_progreso',
-      'notas_tecnico':
-          'Se está realizando la reparación. Se han encontrado problemas adicionales que requieren materiales extras.',
-      'created_at': DateTime.now().subtract(const Duration(days: 1)),
-    };
+  Future<void> _loadServiceDataFromDatabase() async {
+    try {
+      // Si no hay serviceId, obtener servicios en progreso del usuario actual
+      final userId = DatabaseService.currentUserId;
+      if (userId == null) {
+        setState(() {
+          service = {};
+          technician = {};
+        });
+        return;
+      }
 
-    // TODO: Obtener de Supabase usando technician_id
-    technician = {
-      'id': 'tech_1',
-      'nombre': 'Carlos Martínez',
-      'especialidad': 'Carpintería',
-      'foto_url': 'https://via.placeholder.com/150/555879/FFFFFF?text=Carlos',
-      'teléfono': '+57 300 1234567',
-      'email': 'carlos.martinez@example.com',
-      'whatsapp': '+57 300 1234567',
-      'rating': 4.8,
-      'votos': 156,
-    };
+      // Cargar datos del servicio desde Supabase
+      final serviceData = await DatabaseService.getServices(
+        clientId: userId,
+        status: 'en_progreso',
+      );
+
+      if (serviceData.isNotEmpty) {
+        // Si se proporcionó serviceId, buscar ese servicio específico
+        final serviceItem = widget.serviceId != null
+            ? serviceData.firstWhere(
+                (s) => s['id'] == widget.serviceId,
+                orElse: () => serviceData.first,
+              )
+            : serviceData.first;
+        setState(() {
+          service = serviceItem;
+        });
+
+        // Obtener datos del técnico si existe technician_id
+        if (serviceItem['technician_id'] != null) {
+          final techProfile = await DatabaseService.getTechnicianProfile(
+            serviceItem['technician_id'],
+          );
+
+          if (techProfile != null) {
+            setState(() {
+              technician = {
+                'id': techProfile['id'],
+                'nombre': techProfile['users']?['nombre_completo'] ?? 'Técnico',
+                'especialidad': 'Ver especialidades',
+                'foto_url': techProfile['users']?['avatar_url'],
+                'teléfono': techProfile['users']?['telefono'] ?? '',
+                'email': techProfile['users']?['email'] ?? '',
+                'whatsapp': techProfile['users']?['telefono'] ?? '',
+                'rating': techProfile['rating_promedio'] ?? 0.0,
+                'votos': techProfile['total_reviews'] ?? 0,
+              };
+            });
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar datos del servicio: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      setState(() {
+        service = {};
+        technician = {};
+      });
+    }
   }
 
   @override
@@ -172,6 +215,17 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
 
   @override
   Widget build(BuildContext context) {
+    // Validar que service y technician estén cargados
+    if (service == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF4EBD3),
+        appBar: _buildAppBar(),
+        body: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF555879)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4EBD3),
       appBar: _buildAppBar(),
@@ -223,9 +277,9 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
 
   /// Sección de estado
   Widget _buildStatusSection() {
-    final stateColor = _getStateColor(service['estado']);
-    final stateIcon = _getStateIcon(service['estado']);
-    final stateLabel = _getStateLabel(service['estado']);
+    final stateColor = _getStateColor(service!['estado']);
+    final stateIcon = _getStateIcon(service!['estado']);
+    final stateLabel = _getStateLabel(service!['estado']);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -256,7 +310,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
           ),
           const SizedBox(height: 8),
           Text(
-            _calculateRemainingTime(service['fecha_fin']),
+            _calculateRemainingTime(service!['fecha_fin']),
             style: TextStyle(
               fontSize: 14,
               color: stateColor.withOpacity(0.8),
@@ -300,7 +354,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
                   ),
                   child: ClipOval(
                     child: Image.network(
-                      technician['foto_url'],
+                      technician?['foto_url'],
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return const Icon(
@@ -314,7 +368,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  technician['nombre'],
+                  technician?['nombre'],
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -324,7 +378,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  technician['especialidad'],
+                  technician?['especialidad'],
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF98A1BC),
@@ -339,7 +393,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
                     Icon(Icons.star, size: 18, color: const Color(0xFFF39C12)),
                     const SizedBox(width: 4),
                     Text(
-                      '${technician['rating']} (${technician['votos']} votos)',
+                      '${technician?['rating']} (${technician?['votos']} votos)',
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF555879),
@@ -359,19 +413,19 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
           _buildContactRow(
             icon: Icons.phone,
             label: 'Teléfono',
-            value: technician['teléfono'],
+            value: technician?['teléfono'],
           ),
           const SizedBox(height: 12),
           _buildContactRow(
             icon: Icons.email,
             label: 'Email',
-            value: technician['email'],
+            value: technician?['email'],
           ),
           const SizedBox(height: 12),
           _buildContactRow(
             icon: Icons.chat,
             label: 'WhatsApp',
-            value: technician['whatsapp'],
+            value: technician?['whatsapp'],
           ),
         ],
       ),
@@ -476,7 +530,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${_formatDateTime(service['fecha_inicio'])} a las ${_formatTime(service['fecha_inicio'])}',
+                        '${_formatDateTime(service!['fecha_inicio'])} a las ${_formatTime(service!['fecha_inicio'])}',
                         style: const TextStyle(
                           fontSize: 13,
                           color: Color(0xFF555879),
@@ -543,7 +597,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${_formatDateTime(service['fecha_fin'])} a las ${_formatTime(service['fecha_fin'])}',
+                        '${_formatDateTime(service!['fecha_fin'])} a las ${_formatTime(service!['fecha_fin'])}',
                         style: const TextStyle(
                           fontSize: 13,
                           color: Color(0xFF555879),
@@ -564,8 +618,12 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
 
   /// Sección de progreso
   Widget _buildProgressSection() {
-    final startTime = service['fecha_inicio'] as DateTime;
-    final endTime = service['fecha_fin'] as DateTime;
+    final startTime = service!['fecha_inicio'] != null
+        ? DateTime.parse(service!['fecha_inicio'].toString())
+        : DateTime.now();
+    final endTime = service!['fecha_fin'] != null
+        ? DateTime.parse(service!['fecha_fin'].toString())
+        : DateTime.now().add(const Duration(hours: 2));
     final now = DateTime.now();
 
     final totalDuration = endTime.difference(startTime).inMinutes;
@@ -602,7 +660,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
                 ),
               ),
               Text(
-                _calculateRemainingTime(service['fecha_fin']),
+                _calculateRemainingTime(service!['fecha_fin']),
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -630,7 +688,7 @@ class _ServiceInProgressPageState extends State<ServiceInProgressPage>
           border: Border.all(color: const Color(0xFFDED3C4), width: 1.5),
         ),
         child: Text(
-          service['notas_tecnico'],
+          service!['notas_tecnico'],
           style: const TextStyle(
             fontSize: 13,
             color: Color(0xFF555879),

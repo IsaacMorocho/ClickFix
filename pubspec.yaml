@@ -34,7 +34,13 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  
+  # Supabase - Backend principal
   supabase_flutter: ^2.3.4        # Conectar a Supabase
+  
+  # Deep Links - Manejo de links para recuperación de contraseña
+  app_links: ^6.3.2               # Escuchar deep links desde correos
+  
   flutter_dotenv: ^5.0.0          # Cargar variables de entorno
   image_picker: ^1.0.7            # Seleccionar imagenes de galeria/camara
   permission_handler: ^11.3.0     # Manejo de permisos (camara, ubicacion)

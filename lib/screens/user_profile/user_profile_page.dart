@@ -24,8 +24,8 @@ class _UserProfilePageState extends State<UserProfilePage>
   File? _selectedImage;
   final ImagePicker _imagePicker = ImagePicker();
 
-  late Map<String, dynamic> _originalData;
-  late Map<String, dynamic> _currentData;
+  Map<String, dynamic>? _originalData;
+  Map<String, dynamic>? _currentData;
 
   late AnimationController _fadeController;
   late AnimationController _slideController;
@@ -44,7 +44,7 @@ class _UserProfilePageState extends State<UserProfilePage>
     _originalData = {
       'id': '',
       'cedula': '',
-      'nombres_completos': '',
+      'nombre_completo': '',
       'email': '',
       'telefono': '',
       'rol': 'cliente',
@@ -53,7 +53,7 @@ class _UserProfilePageState extends State<UserProfilePage>
       'created_at': '',
     };
 
-    _currentData = Map.from(_originalData);
+    _currentData = Map.from(_originalData!);
 
     _nombresController = TextEditingController();
     _telefonoController = TextEditingController();
@@ -102,7 +102,10 @@ class _UserProfilePageState extends State<UserProfilePage>
         _originalData = {
           'id': response['id'] ?? user.id,
           'cedula': response['cedula'] ?? '',
-          'nombres_completos': response['nombre_completo'] ?? user.userMetadata?['nombre_completo'] ?? 'Usuario',
+          'nombre_completo':
+              response['nombre_completo'] ??
+              user.userMetadata?['nombre_completo'] ??
+              'Usuario',
           'email': response['email'] ?? user.email ?? '',
           'telefono': response['telefono'] ?? '',
           'rol': response['rol'] ?? 'cliente',
@@ -115,7 +118,7 @@ class _UserProfilePageState extends State<UserProfilePage>
         _originalData = {
           'id': user.id,
           'cedula': user.userMetadata?['cedula'] ?? '',
-          'nombres_completos': user.userMetadata?['nombre_completo'] ?? 'Usuario',
+          'nombre_completo': user.userMetadata?['nombre_completo'] ?? 'Usuario',
           'email': user.email ?? '',
           'telefono': user.userMetadata?['telefono'] ?? '',
           'rol': user.userMetadata?['rol'] ?? 'cliente',
@@ -125,16 +128,15 @@ class _UserProfilePageState extends State<UserProfilePage>
         };
       }
 
-      _currentData = Map.from(_originalData);
-      _nombresController.text = _currentData['nombres_completos'] ?? '';
-      _telefonoController.text = _currentData['telefono'] ?? '';
-
+      _currentData = Map.from(_originalData!);
+      _nombresController.text = _currentData?['nombre_completo'] ?? '';
+      _telefonoController.text = _currentData?['telefono'] ?? '';
     } catch (e) {
       // En caso de error, usar datos de auth como fallback
       _originalData = {
         'id': user.id,
         'cedula': user.userMetadata?['cedula'] ?? '',
-        'nombres_completos': user.userMetadata?['nombre_completo'] ?? 'Usuario',
+        'nombre_completo': user.userMetadata?['nombre_completo'] ?? 'Usuario',
         'email': user.email ?? '',
         'telefono': user.userMetadata?['telefono'] ?? '',
         'rol': user.userMetadata?['rol'] ?? 'cliente',
@@ -142,9 +144,9 @@ class _UserProfilePageState extends State<UserProfilePage>
         'estado': 'activo',
         'created_at': user.createdAt,
       };
-      _currentData = Map.from(_originalData);
-      _nombresController.text = _currentData['nombres_completos'] ?? '';
-      _telefonoController.text = _currentData['telefono'] ?? '';
+      _currentData = Map.from(_originalData!);
+      _nombresController.text = _currentData?['nombre_completo'] ?? '';
+      _telefonoController.text = _currentData?['telefono'] ?? '';
     }
 
     if (mounted) {
@@ -225,13 +227,13 @@ class _UserProfilePageState extends State<UserProfilePage>
     setState(() {
       _isEditing = false;
       _selectedImage = null;
-      _currentData = Map.from(_originalData);
-      _nombresController.text = _originalData['nombres_completos'];
-      _telefonoController.text = _originalData['telefono'];
+      _currentData = Map.from(_originalData!);
+      _nombresController.text = _originalData?['nombre_completo'] ?? '';
+      _telefonoController.text = _originalData?['telefono'] ?? '';
     });
   }
 
-  void _saveChanges() {
+  Future<void> _saveChanges() async {
     // Validaciones
     if (_nombresController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -253,39 +255,66 @@ class _UserProfilePageState extends State<UserProfilePage>
       return;
     }
 
-    // Actualizar datos
-    _currentData['nombres_completos'] = _nombresController.text.trim();
-    _currentData['telefono'] = _telefonoController.text.trim();
+    try {
+      // Preparar actualizaciones
+      final updates = {
+        'nombre_completo': _nombresController.text.trim(),
+        'telefono': _telefonoController.text.trim(),
+      };
 
-    // TODO: Guardar en Supabase
-    // 1. Actualizar tabla 'users' con nuevos nombres y teléfono
-    // 2. Si hay foto seleccionada (_selectedImage), subirla a Storage:
-    //    - Bucket: user_profiles
-    //    - Ruta: $userId/profile.jpg
-    //    - Actualizar campo foto_url en tabla users
-    // Ejemplo:
-    // final bytes = await _selectedImage!.readAsBytes();
-    // await supabase.storage.from('user_profiles').uploadBinary(
-    //   '${_currentData['id']}/profile.jpg',
-    //   bytes,
-    //   fileOptions: const FileOptions(upsert: true),
-    // );
-    // await supabase.from('users').update({
-    //   'nombres_completos': _currentData['nombres_completos'],
-    //   'telefono': _currentData['telefono'],
-    //   'foto_url': urlDesdeStorage,
-    // }).eq('id', _currentData['id']);
+      // Si hay imagen seleccionada, subirla primero
+      if (_selectedImage != null && _currentData?['id'] != null) {
+        final bytes = await _selectedImage!.readAsBytes();
+        final avatarUrl = await Supabase.instance.client.storage
+            .from('avatars')
+            .uploadBinary(
+              '${_currentData?['id']}/profile.jpg',
+              bytes,
+              fileOptions: const FileOptions(upsert: true),
+            );
 
-    setState(() {
-      _isEditing = false;
-    });
+        // Obtener URL pública
+        final publicUrl = Supabase.instance.client.storage
+            .from('avatars')
+            .getPublicUrl('${_currentData?['id']}/profile.jpg');
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Perfil actualizado correctamente'),
-        backgroundColor: Color(0xFF555879),
-      ),
-    );
+        updates['avatar_url'] = publicUrl;
+      }
+
+      // Actualizar en Supabase
+      await Supabase.instance.client
+          .from('users')
+          .update(updates)
+          .eq('id', _currentData?['id']);
+
+      // Actualizar datos locales
+      _currentData?['nombre_completo'] = _nombresController.text.trim();
+      _currentData?['telefono'] = _telefonoController.text.trim();
+      _originalData = Map.from(_currentData!);
+
+      setState(() {
+        _isEditing = false;
+        _selectedImage = null;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Perfil actualizado correctamente'),
+            backgroundColor: Color(0xFF27AE60),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar cambios: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // ========================================================================
@@ -306,7 +335,10 @@ class _UserProfilePageState extends State<UserProfilePage>
               child: SlideTransition(
                 position: _slideAnimation,
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 20,
+                  ),
                   child: Column(
                     children: [
                       _buildProfilePhotoSection(),
@@ -470,22 +502,35 @@ class _UserProfilePageState extends State<UserProfilePage>
               children: [
                 _buildInfoField(
                   'Nombres Completos',
-                  _currentData['nombres_completos'],
+                  _currentData?['nombre_completo'] ?? 'No disponible',
                 ),
                 const SizedBox(height: 12),
-                _buildInfoField('Teléfono', _currentData['telefono']),
+                _buildInfoField(
+                  'Teléfono',
+                  _currentData?['telefono'] ?? 'No disponible',
+                ),
                 const SizedBox(height: 12),
-                _buildInfoField('Email', _currentData['email']),
+                _buildInfoField(
+                  'Email',
+                  _currentData?['email'] ?? 'No disponible',
+                ),
                 const SizedBox(height: 12),
-                _buildInfoField('Cédula', _currentData['cedula']),
+                _buildInfoField(
+                  'Cédula',
+                  _currentData?['cedula'] ?? 'No disponible',
+                ),
               ],
             ),
     );
   }
 
   Widget _buildStateSection() {
-    final estado = _currentData['estado'].toString().toUpperCase();
-    final Color stateColor = _getStateColor(_currentData['estado']);
+    final estado = (_currentData?['estado'] ?? 'activo')
+        .toString()
+        .toUpperCase();
+    final Color stateColor = _getStateColor(
+      _currentData?['estado'] ?? 'activo',
+    );
 
     return _buildSectionContainer(
       icon: Icons.verified_user,
@@ -500,7 +545,7 @@ class _UserProfilePageState extends State<UserProfilePage>
         child: Row(
           children: [
             Icon(
-              _getStateIcon(_currentData['estado']),
+              _getStateIcon(_currentData?['estado'] ?? 'activo'),
               color: stateColor,
               size: 24,
             ),
@@ -526,13 +571,13 @@ class _UserProfilePageState extends State<UserProfilePage>
       title: 'Información del Sistema',
       content: Column(
         children: [
-          _buildInfoField('Rol', _currentData['rol'].toUpperCase()),
+          _buildInfoField('Rol', _currentData?['rol'].toUpperCase()),
           const SizedBox(height: 12),
-          _buildInfoField('ID', _currentData['id']),
+          _buildInfoField('ID', _currentData?['id']),
           const SizedBox(height: 12),
           _buildInfoField(
             'Fecha de Registro',
-            _formatDate(_currentData['created_at']),
+            _formatDate(_currentData?['created_at']),
           ),
         ],
       ),
@@ -639,7 +684,7 @@ class _UserProfilePageState extends State<UserProfilePage>
     );
   }
 
-  Widget _buildInfoField(String label, String value) {
+  Widget _buildInfoField(String label, String? value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -654,7 +699,7 @@ class _UserProfilePageState extends State<UserProfilePage>
         ),
         const SizedBox(height: 4),
         Text(
-          value,
+          value ?? 'No disponible',
           style: const TextStyle(
             fontSize: 15,
             color: Color(0xFF555879),

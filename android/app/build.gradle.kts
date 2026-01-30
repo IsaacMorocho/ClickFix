@@ -24,8 +24,10 @@ android {
         applicationId = "com.example.clickfixapp"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        
+        // Android 12+ (API 31) para compatibilidad con dispositivos modernos
+        minSdk = 31  // Android 12.0
+        targetSdk = 34  // Android 14
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

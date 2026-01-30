@@ -63,40 +63,50 @@ class _ServiceHistoryPageState extends State<ServiceHistoryPage>
     try {
       // Cargar servicios completados del cliente
       final services = await DatabaseService.getServices(status: 'completado');
-      
+
       // Filtrar solo los servicios del cliente actual
       final clientServices = services.where((s) {
         final serviceRequest = s['service_requests'] as Map<String, dynamic>?;
-        return serviceRequest?['cliente_id'] == userId;
+        return serviceRequest?['client_id'] == userId;
       }).toList();
 
       // Cargar reseñas del cliente para saber cuáles ya calificó
       final reviews = await DatabaseService.getReviews(autorId: userId);
       final reviewedServiceIds = reviews.map((r) => r['service_id']).toSet();
-      
+
       if (mounted) {
         setState(() {
           _services = clientServices.map((s) {
-            final serviceRequest = s['service_requests'] as Map<String, dynamic>?;
+            final serviceRequest =
+                s['service_requests'] as Map<String, dynamic>?;
             final technician = s['technicians'] as Map<String, dynamic>?;
             final techUser = technician?['users'] as Map<String, dynamic>?;
             final quote = s['quotes'] as Map<String, dynamic>?;
             final isRated = reviewedServiceIds.contains(s['id']);
-            
+
             // Buscar la calificación si existe
             final review = reviews.firstWhere(
               (r) => r['service_id'] == s['id'],
               orElse: () => {},
             );
-            
+
             return {
               ...s,
-              'descripcion': serviceRequest?['descripcion_problema'] ?? 'Sin descripción',
+              'descripcion':
+                  serviceRequest?['descripcion_problema'] ?? 'Sin descripción',
+              'categoria': serviceRequest?['categoria'] ?? 'General',
+              'direccion': serviceRequest?['direccion'] ?? 'Sin dirección',
+              'tecnico_id': technician?['id'] ?? '',
               'tecnico_nombre': techUser?['nombre_completo'] ?? 'Técnico',
-              'tecnico_foto': techUser?['avatar_url'] ?? 'https://via.placeholder.com/150/555879/FFFFFF?text=T',
-              'especialidad': 'Servicio técnico',
-              'fecha_completado': s['fecha_fin'] != null ? DateTime.parse(s['fecha_fin']) : DateTime.now(),
+              'tecnico_foto':
+                  techUser?['avatar_url'] ??
+                  'https://via.placeholder.com/150/555879/FFFFFF?text=T',
+              'especialidad': technician?['especialidad'] ?? 'Servicio técnico',
+              'fecha_completado': s['fecha_fin'] != null
+                  ? DateTime.parse(s['fecha_fin'])
+                  : DateTime.now(),
               'monto': quote?['monto'] ?? 0,
+              'duracion_horas': quote?['duracion_estimada'] ?? 0,
               'calificado': isRated,
               'calificacion': review['calificacion'],
             };
@@ -130,8 +140,18 @@ class _ServiceHistoryPageState extends State<ServiceHistoryPage>
 
   String _formatDate(DateTime date) {
     final months = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
@@ -172,7 +192,10 @@ class _ServiceHistoryPageState extends State<ServiceHistoryPage>
           child: _services.isEmpty
               ? _buildEmptyState()
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                   itemCount: _services.length,
                   itemBuilder: (context, index) {
                     return _buildServiceCard(_services[index]);
@@ -316,7 +339,10 @@ class _ServiceHistoryPageState extends State<ServiceHistoryPage>
                 )
               else
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF39C12).withOpacity(0.2),
                     borderRadius: BorderRadius.circular(8),
@@ -337,6 +363,31 @@ class _ServiceHistoryPageState extends State<ServiceHistoryPage>
           const SizedBox(height: 16),
           Container(height: 1, color: const Color(0xFFDED3C4)),
           const SizedBox(height: 16),
+
+          // Información del servicio
+          Row(
+            children: [
+              Expanded(
+                child: _buildInfoChip(
+                  Icons.category_outlined,
+                  service['categoria'],
+                  Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (service['duracion_horas'] > 0)
+                Expanded(
+                  child: _buildInfoChip(
+                    Icons.schedule,
+                    '${service['duracion_horas']}h',
+                    Colors.purple,
+                  ),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
           // Descripcion
           Text(
             service['descripcion'],
@@ -346,7 +397,37 @@ class _ServiceHistoryPageState extends State<ServiceHistoryPage>
               fontFamily: 'Montserrat',
               height: 1.4,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
+
+          const SizedBox(height: 12),
+
+          // Dirección
+          if (service['direccion'] != 'Sin dirección')
+            Row(
+              children: [
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 16,
+                  color: Color(0xFF98A1BC),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    service['direccion'],
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF98A1BC),
+                      fontFamily: 'Montserrat',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+
           const SizedBox(height: 16),
           // Footer
           Row(
@@ -367,7 +448,7 @@ class _ServiceHistoryPageState extends State<ServiceHistoryPage>
                   Text(
                     _formatMoney(service['monto']),
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF555879),
                       fontFamily: 'Montserrat',
@@ -375,28 +456,88 @@ class _ServiceHistoryPageState extends State<ServiceHistoryPage>
                   ),
                 ],
               ),
-              if (!service['calificado'])
-                ElevatedButton.icon(
-                  onPressed: () => _rateService(service),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF555879),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+              Row(
+                children: [
+                  // Botón para contratar de nuevo
+                  if (service['tecnico_id'].isNotEmpty)
+                    IconButton(
+                      onPressed: () {
+                        // Navegar a crear solicitud con este técnico pre-seleccionado
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Contratar nuevamente a ${service['tecnico_nombre']}',
+                            ),
+                            action: SnackBarAction(
+                              label: 'OK',
+                              onPressed: () {},
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.replay),
+                      color: const Color(0xFF555879),
+                      tooltip: 'Contratar nuevamente',
                     ),
-                  ),
-                  icon: const Icon(Icons.star, size: 18),
-                  label: const Text(
-                    'Calificar',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Montserrat',
+                  const SizedBox(width: 8),
+                  if (!service['calificado'])
+                    ElevatedButton.icon(
+                      onPressed: () => _rateService(service),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF555879),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      icon: const Icon(Icons.star, size: 18),
+                      label: const Text(
+                        'Calificar',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Montserrat',
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                ],
+              ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: color,
+                fontFamily: 'Montserrat',
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),

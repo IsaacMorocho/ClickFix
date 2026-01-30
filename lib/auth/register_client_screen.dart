@@ -32,6 +32,7 @@ class _RegisterClientScreenState extends State<RegisterClientScreen>
   bool _hasSymbol = false;
   bool _showPasswordStrength = false;
   bool _loading = false;
+  bool _acceptedTerms = false;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -43,10 +44,7 @@ class _RegisterClientScreenState extends State<RegisterClientScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-    _fadeAnim = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeIn,
-    );
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _passwordCtrl.addListener(() {
       _onPasswordChanged(_passwordCtrl.text);
     });
@@ -104,6 +102,11 @@ class _RegisterClientScreenState extends State<RegisterClientScreen>
   Future<void> _register() async {
     if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
+
+    if (!_acceptedTerms) {
+      _showError('Debes aceptar los términos y condiciones para continuar');
+      return;
+    }
 
     try {
       setState(() => _loading = true);
@@ -181,11 +184,7 @@ class _RegisterClientScreenState extends State<RegisterClientScreen>
           key: _formKey,
           child: Column(
             children: [
-              const Icon(
-                Icons.person,
-                size: 60,
-                color: AppColors.primary,
-              ),
+              const Icon(Icons.person, size: 60, color: AppColors.primary),
               const SizedBox(height: 16),
               const Text(
                 'Registro de Cliente',
@@ -199,10 +198,7 @@ class _RegisterClientScreenState extends State<RegisterClientScreen>
               const Text(
                 'Completa tus datos para crear tu cuenta',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.secondary,
-                ),
+                style: TextStyle(fontSize: 14, color: AppColors.secondary),
               ),
               const SizedBox(height: 24),
               AuthInput(
@@ -262,8 +258,9 @@ class _RegisterClientScreenState extends State<RegisterClientScreen>
                     return 'Este campo no puede quedar vacio';
                   }
                   final email = value.trim();
-                  final emailRegex =
-                      RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                  final emailRegex = RegExp(
+                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                  );
                   if (!emailRegex.hasMatch(email)) {
                     return 'Correo electronico no valido';
                   }
@@ -307,10 +304,7 @@ class _RegisterClientScreenState extends State<RegisterClientScreen>
                   ),
                 ),
                 TweenAnimationBuilder<double>(
-                  tween: Tween<double>(
-                    begin: 0,
-                    end: _passwordStrength,
-                  ),
+                  tween: Tween<double>(begin: 0, end: _passwordStrength),
                   duration: const Duration(milliseconds: 300),
                   builder: (context, value, _) {
                     return LinearProgressIndicator(
@@ -352,12 +346,92 @@ class _RegisterClientScreenState extends State<RegisterClientScreen>
                   return null;
                 },
               ),
+              const SizedBox(height: 16),
+
+              // Términos y condiciones
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.blue[700],
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Normas de uso importante',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '• No se permite contactar a técnicos fuera de la aplicación para realizar trabajos.',
+                      style: TextStyle(fontSize: 13, height: 1.4),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '• Todos los servicios deben coordinarse exclusivamente a través de ClickFix.',
+                      style: TextStyle(fontSize: 13, height: 1.4),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '• Contactar técnicos por fuera puede resultar en la suspensión de tu cuenta.',
+                      style: TextStyle(fontSize: 13, height: 1.4),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () {
+                        setState(() => _acceptedTerms = !_acceptedTerms);
+                      },
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: Checkbox(
+                              value: _acceptedTerms,
+                              onChanged: (value) {
+                                setState(() => _acceptedTerms = value ?? false);
+                              },
+                              activeColor: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'He leído y acepto estas normas de uso',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 24),
               AuthButton(
                 text: 'Registrarme',
                 loading: _loading,
-                onPressed:
-                    (_passwordStrength == 1.0 && !_loading) ? _register : null,
+                onPressed: (_passwordStrength == 1.0 && !_loading)
+                    ? _register
+                    : null,
               ),
               const SizedBox(height: 16),
               TextButton(
@@ -376,10 +450,7 @@ class _PasswordCheck extends StatelessWidget {
   final String text;
   final bool checked;
 
-  const _PasswordCheck({
-    required this.text,
-    required this.checked,
-  });
+  const _PasswordCheck({required this.text, required this.checked});
 
   @override
   Widget build(BuildContext context) {

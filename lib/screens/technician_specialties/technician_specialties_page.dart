@@ -334,25 +334,32 @@ class _TechnicianSpecialtiesPageState extends State<TechnicianSpecialtiesPage>
   }
 
   IconData _getSpecialtyIcon(String nombre) {
-    switch (nombre.toLowerCase()) {
-      case 'plomeria':
-        return Icons.plumbing;
-      case 'electricidad':
-        return Icons.electrical_services;
-      case 'carpinteria':
-        return Icons.carpenter;
-      case 'pintura':
-        return Icons.format_paint;
-      case 'albanileria':
-        return Icons.construction;
-      case 'cerrajeria':
-        return Icons.lock;
-      case 'aire acondicionado':
-        return Icons.ac_unit;
-      case 'electrodomesticos':
-        return Icons.kitchen;
-      default:
-        return Icons.build;
+    final nombreLower = nombre.toLowerCase();
+
+    // Iconos para especialidades de informática y computación
+    if (nombreLower.contains('reparación de pc') ||
+        nombreLower.contains('reparacion de pc')) {
+      return Icons.computer;
+    } else if (nombreLower.contains('laptop')) {
+      return Icons.laptop;
+    } else if (nombreLower.contains('mantenimiento')) {
+      return Icons.build_circle;
+    } else if (nombreLower.contains('software') ||
+        nombreLower.contains('instalación')) {
+      return Icons.apps;
+    } else if (nombreLower.contains('redes') ||
+        nombreLower.contains('conectividad')) {
+      return Icons.lan;
+    } else if (nombreLower.contains('recuperación') ||
+        nombreLower.contains('datos')) {
+      return Icons.settings_backup_restore;
+    } else if (nombreLower.contains('hardware') ||
+        nombreLower.contains('actualización')) {
+      return Icons.memory;
+    } else if (nombreLower.contains('soporte')) {
+      return Icons.support_agent;
+    } else {
+      return Icons.build;
     }
   }
 

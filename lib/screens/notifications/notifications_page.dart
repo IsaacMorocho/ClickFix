@@ -329,7 +329,9 @@ class _NotificationsPageState extends State<NotificationsPage>
   Widget _buildNotificationCard(int index) {
     final notification = _notifications[index];
     final isRead = notification['leido'] as bool;
-    final createdAt = notification['created_at'] as DateTime;
+    final createdAt = notification['created_at'] != null
+        ? DateTime.parse(notification['created_at'].toString())
+        : DateTime.now();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),

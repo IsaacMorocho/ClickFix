@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/database_service.dart';
 
 class ReceivedReviewsPage extends StatefulWidget {
   const ReceivedReviewsPage({super.key});
@@ -18,7 +19,7 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  late List<Map<String, dynamic>> _reviews;
+  List<Map<String, dynamic>>? _reviews;
 
   @override
   void initState() {
@@ -47,49 +48,46 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
     _fadeController.forward();
     _slideController.forward();
 
-    _initializeSampleData();
+    _loadReviewsFromDatabase();
   }
 
-  void _initializeSampleData() {
-    // TODO: Obtener de Supabase - resenas donde receptor_id = tecnico actual
-    _reviews = [
-      {
-        'id': '1',
-        'autor_nombre': 'Maria Garcia',
-        'autor_foto': 'https://via.placeholder.com/150/555879/FFFFFF?text=MG',
-        'calificacion': 5,
-        'comentario': 'Excelente trabajo! Muy profesional y puntual. Recomendado 100%.',
-        'servicio': 'Reparacion de tuberia',
-        'fecha': DateTime.now().subtract(const Duration(days: 2)),
-      },
-      {
-        'id': '2',
-        'autor_nombre': 'Juan Perez',
-        'autor_foto': 'https://via.placeholder.com/150/98A1BC/FFFFFF?text=JP',
-        'calificacion': 4,
-        'comentario': 'Buen servicio, llego a tiempo y resolvio el problema rapidamente.',
-        'servicio': 'Instalacion electrica',
-        'fecha': DateTime.now().subtract(const Duration(days: 5)),
-      },
-      {
-        'id': '3',
-        'autor_nombre': 'Ana Rodriguez',
-        'autor_foto': 'https://via.placeholder.com/150/DED3C4/555879?text=AR',
-        'calificacion': 5,
-        'comentario': 'Muy satisfecha con el trabajo realizado. Limpio y ordenado.',
-        'servicio': 'Reparacion de puerta',
-        'fecha': DateTime.now().subtract(const Duration(days: 10)),
-      },
-      {
-        'id': '4',
-        'autor_nombre': 'Carlos Lopez',
-        'autor_foto': 'https://via.placeholder.com/150/555879/FFFFFF?text=CL',
-        'calificacion': 3,
-        'comentario': 'El trabajo estuvo bien, pero tardo mas de lo esperado.',
-        'servicio': 'Pintura de habitacion',
-        'fecha': DateTime.now().subtract(const Duration(days: 15)),
-      },
-    ];
+  Future<void> _loadReviewsFromDatabase() async {
+    try {
+      // Obtener el ID del técnico actual
+      final userId = DatabaseService.currentUserId;
+      if (userId == null) {
+        setState(() => _reviews = []);
+        return;
+      }
+
+      // Obtener perfil de técnico
+      final techProfile = await DatabaseService.getTechnicianProfile(userId);
+      if (techProfile == null) {
+        setState(() => _reviews = []);
+        return;
+      }
+
+      // Cargar reseñas reales desde Supabase
+      final reviewsData = await DatabaseService.getReviews(
+        receptorId: techProfile['id'],
+      );
+
+      setState(() {
+        _reviews = reviewsData;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar reseñas: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      setState(() {
+        _reviews = [];
+      });
+    }
   }
 
   @override
@@ -104,14 +102,30 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
   // ========================================================================
 
   String _formatDate(DateTime date) {
-    final months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    final months = [
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
+    ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   double get _averageRating {
-    if (_reviews.isEmpty) return 0;
-    final total = _reviews.fold<int>(0, (sum, r) => sum + (r['calificacion'] as int));
-    return total / _reviews.length;
+    if (_reviews?.isEmpty ?? true) return 0;
+    final total = _reviews!.fold<int>(
+      0,
+      (sum, r) => sum + (r['calificacion'] as int),
+    );
+    return total / _reviews!.length;
   }
 
   // ========================================================================
@@ -131,13 +145,16 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
             children: [
               _buildStatsSection(),
               Expanded(
-                child: _reviews.isEmpty
+                child: (_reviews?.isEmpty ?? true)
                     ? _buildEmptyState()
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        itemCount: _reviews.length,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        itemCount: _reviews!.length,
                         itemBuilder: (context, index) {
-                          return _buildReviewCard(_reviews[index]);
+                          return _buildReviewCard(_reviews![index]);
                         },
                       ),
               ),
@@ -202,7 +219,9 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(5, (index) {
                     return Icon(
-                      index < _averageRating.round() ? Icons.star : Icons.star_border,
+                      index < _averageRating.round()
+                          ? Icons.star
+                          : Icons.star_border,
                       size: 20,
                       color: const Color(0xFFF39C12),
                     );
@@ -210,7 +229,7 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${_reviews.length} resenas',
+                  '${_reviews?.length ?? 0} resenas',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF98A1BC),
@@ -224,11 +243,26 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
           Expanded(
             child: Column(
               children: [
-                _buildRatingBar(5, _reviews.where((r) => r['calificacion'] == 5).length),
-                _buildRatingBar(4, _reviews.where((r) => r['calificacion'] == 4).length),
-                _buildRatingBar(3, _reviews.where((r) => r['calificacion'] == 3).length),
-                _buildRatingBar(2, _reviews.where((r) => r['calificacion'] == 2).length),
-                _buildRatingBar(1, _reviews.where((r) => r['calificacion'] == 1).length),
+                _buildRatingBar(
+                  5,
+                  _reviews?.where((r) => r['calificacion'] == 5).length ?? 0,
+                ),
+                _buildRatingBar(
+                  4,
+                  _reviews?.where((r) => r['calificacion'] == 4).length ?? 0,
+                ),
+                _buildRatingBar(
+                  3,
+                  _reviews?.where((r) => r['calificacion'] == 3).length ?? 0,
+                ),
+                _buildRatingBar(
+                  2,
+                  _reviews?.where((r) => r['calificacion'] == 2).length ?? 0,
+                ),
+                _buildRatingBar(
+                  1,
+                  _reviews?.where((r) => r['calificacion'] == 1).length ?? 0,
+                ),
               ],
             ),
           ),
@@ -238,7 +272,9 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
   }
 
   Widget _buildRatingBar(int stars, int count) {
-    final percentage = _reviews.isEmpty ? 0.0 : count / _reviews.length;
+    final percentage = (_reviews?.isEmpty ?? true)
+        ? 0.0
+        : count / (_reviews?.length ?? 1);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 16),
@@ -392,7 +428,9 @@ class _ReceivedReviewsPageState extends State<ReceivedReviewsPage>
                   Row(
                     children: List.generate(5, (index) {
                       return Icon(
-                        index < (review['calificacion'] as int) ? Icons.star : Icons.star_border,
+                        index < (review['calificacion'] as int)
+                            ? Icons.star
+                            : Icons.star_border,
                         size: 16,
                         color: const Color(0xFFF39C12),
                       );

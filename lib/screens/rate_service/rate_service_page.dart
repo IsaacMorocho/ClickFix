@@ -165,9 +165,15 @@ class _RateServicePageState extends State<RateServicePage>
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildInfoRow('Servicio:', widget.service['descripcion'] ?? 'Servicio completado'),
+          _buildInfoRow(
+            'Servicio:',
+            widget.service['descripcion'] ?? 'Servicio completado',
+          ),
           const SizedBox(height: 12),
-          _buildInfoRow('Tecnico:', widget.service['tecnico_nombre'] ?? 'Carlos Martinez'),
+          _buildInfoRow(
+            'Tecnico:',
+            widget.service['tecnico_nombre'] ?? 'Carlos Martinez',
+          ),
           const SizedBox(height: 12),
           _buildInfoRow('Fecha:', widget.service['fecha'] ?? 'Hoy'),
         ],
@@ -218,7 +224,9 @@ class _RateServicePageState extends State<RateServicePage>
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: _rating > 0 ? const Color(0xFF555879) : const Color(0xFF98A1BC),
+              color: _rating > 0
+                  ? const Color(0xFF555879)
+                  : const Color(0xFF98A1BC),
               fontFamily: 'Montserrat',
             ),
           ),

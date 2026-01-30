@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:app_links/app_links.dart';
 
 import 'auth/login_screen.dart';
 import 'services/onesignal_service.dart';
 import 'auth/reset_password_screen.dart';
 import 'core/app_colors.dart';
+import 'core/animations/page_transitions.dart';
 import 'splash/splash_screen.dart';
 import 'screens/location_permission/location_permission_page.dart';
+import 'services/database_service.dart';
 
 import 'screens/user_profile/user_profile_page.dart';
 import 'screens/technician_profile/technician_profile_page.dart';
@@ -30,25 +33,92 @@ import 'screens/admin/admin_specialties_page.dart';
 import 'screens/admin/admin_requests_page.dart';
 import 'screens/admin/admin_services_page.dart';
 import 'screens/admin/admin_reviews_page.dart';
+import 'screens/clients_map/clients_map_page.dart';
+import 'screens/service_tracking/service_tracking_page.dart';
+import 'screens/favorite_technicians/favorite_technicians_page.dart';
+import 'screens/technician_filter/technician_filter_page.dart';
+import 'screens/bidirectional_rating/rate_technician_page.dart';
+import 'screens/bidirectional_rating/rate_client_page.dart';
+import 'screens/technician_work_history/technician_work_history_page.dart';
+import 'screens/price_calculator/price_calculator_page.dart';
+import 'screens/service_arrival/service_arrival_page.dart';
 
 bool isManualLogin = false;
 String? pendingConfirmationMessage;
 
+// GlobalKey para navegación desde deep links
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-    authOptions: const FlutterAuthClientOptions(
-      authFlowType: AuthFlowType.pkce,
-    ),
-    debug: false,
-  );
-  
+
+  // Cargar variables de entorno
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint('No se pudo cargar el archivo .env: $e');
+  }
+
+  // Inicializar Supabase
+  try {
+    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+
+    if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+      await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+      debugPrint('✅ Supabase inicializado correctamente');
+    } else {
+      debugPrint('⚠️ Variables de Supabase no configuradas en .env');
+    }
+  } catch (e) {
+    debugPrint('❌ Error al inicializar Supabase: $e');
+  }
+
+  // Inicializar OneSignal para notificaciones
   await OneSignalService.initialize();
-  
+
+  // Inicializar listener de Deep Links
+  _initDeepLinks();
+
   runApp(const MyApp());
+}
+
+/// Configurar listener de deep links para recuperación de contraseña
+void _initDeepLinks() {
+  final appLinks = AppLinks();
+
+  // Escuchar deep links entrantes
+  appLinks.uriLinkStream.listen(
+    (Uri uri) {
+      debugPrint('🔗 Deep link recibido: $uri');
+
+      // Verificar si es un link de reset password
+      if (uri.host == 'reset-password' || uri.path.contains('reset-password')) {
+        // Extraer el access_token del fragment o query
+        final token = uri.fragment.isNotEmpty
+            ? Uri.parse('?${uri.fragment}').queryParameters['access_token']
+            : uri.queryParameters['access_token'];
+
+        if (token != null) {
+          debugPrint('✅ Token de reset encontrado');
+
+          // Navegar a la pantalla de reset password
+          Future.delayed(const Duration(milliseconds: 500), () {
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (context) => const ResetPasswordScreen(),
+              ),
+            );
+          });
+        } else {
+          debugPrint('⚠️ No se encontró token en el deep link');
+        }
+      }
+    },
+    onError: (error) {
+      debugPrint('❌ Error en deep link: $error');
+    },
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -57,6 +127,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey, // ⬅️ Agregar el GlobalKey
       title: 'ClickFix',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -67,29 +138,173 @@ class MyApp extends StatelessWidget {
           filled: true,
           fillColor: AppColors.background,
         ),
+        // Configuración de transiciones de página por defecto
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          },
+        ),
       ),
       home: SplashScreen(nextScreen: const AuthGate()),
-      routes: {
-        '/notifications': (context) => const NotificationsPage(),
-        '/userProfile': (context) => const UserProfilePage(),
-        '/technicianProfile': (context) => const TechnicianProfilePage(),
-        '/serviceRequestCreate': (context) => const ServiceRequestCreatePage(),
-        '/serviceRequests': (context) => const ServiceRequestsListPage(),
-        '/serviceInProgress': (context) => const ServiceInProgressPage(),
-        '/serviceHistory': (context) => const ServiceHistoryPage(),
-        '/technicianSpecialties': (context) => const TechnicianSpecialtiesPage(),
-        '/technicianCertificates': (context) => const TechnicianCertificatesPage(),
-        '/availableRequests': (context) => const AvailableRequestsPage(),
-        '/myQuotations': (context) => const MyQuotationsPage(),
-        '/assignedServices': (context) => const AssignedServicesPage(),
-        '/receivedReviews': (context) => const ReceivedReviewsPage(),
-        '/adminDashboard': (context) => const AdminDashboardPage(),
-        '/adminUsers': (context) => const AdminUsersPage(),
-        '/adminTechnicians': (context) => const AdminTechniciansPage(),
-        '/adminSpecialties': (context) => const AdminSpecialtiesPage(),
-        '/adminRequests': (context) => const AdminRequestsPage(),
-        '/adminServices': (context) => const AdminServicesPage(),
-        '/adminReviews': (context) => const AdminReviewsPage(),
+      // Generador de rutas personalizado para animaciones
+      onGenerateRoute: (settings) {
+        // Determinar el tipo de transición según la ruta
+        PageTransitionType transitionType;
+        Widget page;
+
+        switch (settings.name) {
+          case '/notifications':
+            transitionType = PageTransitionType.slideDown;
+            page = const NotificationsPage();
+            break;
+          case '/userProfile':
+            transitionType = PageTransitionType.fadeScale;
+            page = const UserProfilePage();
+            break;
+          case '/technicianProfile':
+            transitionType = PageTransitionType.fadeScale;
+            page = const TechnicianProfilePage();
+            break;
+          case '/serviceRequestCreate':
+            transitionType = PageTransitionType.slideUp;
+            page = const ServiceRequestCreatePage();
+            break;
+          case '/serviceRequests':
+            transitionType = PageTransitionType.slideLeft;
+            page = const ServiceRequestsListPage();
+            break;
+          case '/serviceInProgress':
+            transitionType = PageTransitionType.slideLeft;
+            page = const ServiceInProgressPage();
+            break;
+          case '/serviceHistory':
+            transitionType = PageTransitionType.slideLeft;
+            page = const ServiceHistoryPage();
+            break;
+          case '/technicianSpecialties':
+            transitionType = PageTransitionType.fadeScale;
+            page = const TechnicianSpecialtiesPage();
+            break;
+          case '/technicianCertificates':
+            transitionType = PageTransitionType.fadeScale;
+            page = const TechnicianCertificatesPage();
+            break;
+          case '/availableRequests':
+            transitionType = PageTransitionType.slideLeft;
+            page = const AvailableRequestsPage();
+            break;
+          case '/myQuotations':
+            transitionType = PageTransitionType.slideLeft;
+            page = const MyQuotationsPage();
+            break;
+          case '/assignedServices':
+            transitionType = PageTransitionType.slideLeft;
+            page = const AssignedServicesPage();
+            break;
+          case '/receivedReviews':
+            transitionType = PageTransitionType.slideLeft;
+            page = const ReceivedReviewsPage();
+            break;
+          case '/adminDashboard':
+            transitionType = PageTransitionType.fadeScale;
+            page = const AdminDashboardPage();
+            break;
+          case '/adminUsers':
+            transitionType = PageTransitionType.slideLeft;
+            page = const AdminUsersPage();
+            break;
+          case '/adminTechnicians':
+            transitionType = PageTransitionType.slideLeft;
+            page = const AdminTechniciansPage();
+            break;
+          case '/adminSpecialties':
+            transitionType = PageTransitionType.slideLeft;
+            page = const AdminSpecialtiesPage();
+            break;
+          case '/adminRequests':
+            transitionType = PageTransitionType.slideLeft;
+            page = const AdminRequestsPage();
+            break;
+          case '/adminServices':
+            transitionType = PageTransitionType.slideLeft;
+            page = const AdminServicesPage();
+            break;
+          case '/adminReviews':
+            transitionType = PageTransitionType.slideLeft;
+            page = const AdminReviewsPage();
+            break;
+          case '/clientsMap':
+            transitionType = PageTransitionType.fadeScale;
+            page = const ClientsMapPage();
+            break;
+          case '/serviceTracking':
+            transitionType = PageTransitionType.slideLeft;
+            final args = settings.arguments as Map<String, dynamic>?;
+            page = ServiceTrackingPage(
+              serviceId: args?['serviceId'] ?? '',
+              requestTitle: args?['requestTitle'] ?? 'Servicio',
+            );
+            break;
+          case '/favoriteTechnicians':
+            transitionType = PageTransitionType.slideLeft;
+            page = const FavoriteTechniciansPage();
+            break;
+          case '/technicianFilter':
+            transitionType = PageTransitionType.slideUp;
+            page = const TechnicianFilterPage();
+            break;
+          case '/rateTechnician':
+            transitionType = PageTransitionType.slideUp;
+            final args = settings.arguments as Map<String, dynamic>?;
+            page = RateTechnicianPage(
+              serviceId: args?['serviceId'] ?? '',
+              technicianId: args?['technicianId'] ?? '',
+              technicianName: args?['technicianName'] ?? 'Técnico',
+              technicianPhoto: args?['technicianPhoto'],
+            );
+            break;
+          case '/rateClient':
+            transitionType = PageTransitionType.slideUp;
+            final args = settings.arguments as Map<String, dynamic>?;
+            page = RateClientPage(
+              serviceId: args?['serviceId'] ?? '',
+              clientId: args?['clientId'] ?? '',
+              clientName: args?['clientName'] ?? 'Cliente',
+            );
+            break;
+          case '/technicianWorkHistory':
+            transitionType = PageTransitionType.slideLeft;
+            page = const TechnicianWorkHistoryPage();
+            break;
+          case '/priceCalculator':
+            transitionType = PageTransitionType.slideUp;
+            final args = settings.arguments as Map<String, dynamic>?;
+            page = PriceCalculatorPage(
+              serviceRequestId: args?['serviceRequestId'] ?? '',
+              serviceType: args?['serviceType'] ?? 'General',
+              clientZone: args?['clientZone'],
+            );
+            break;
+          case '/serviceArrival':
+            transitionType = PageTransitionType.slideLeft;
+            final args = settings.arguments as Map<String, dynamic>?;
+            page = ServiceArrivalPage(
+              serviceId: args?['serviceId'] ?? '',
+              clientName: args?['clientName'] ?? 'Cliente',
+              address: args?['address'] ?? 'Sin dirección',
+            );
+            break;
+          default:
+            return null;
+        }
+
+        return CustomPageTransition(
+          page: page,
+          type: transitionType,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOutCubic,
+        );
       },
     );
   }
@@ -104,102 +319,84 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   bool _showResetPassword = false;
-  bool _isLoading = true;
+  bool _isLoading = false;
   String? _userRole;
+  bool _isLoggedIn = false;
 
   @override
   void initState() {
     super.initState();
-    _setupAuthListener();
+    _checkExistingSession();
+  }
 
-    //Si ya hay sesion cargar rol
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session?.user != null) {
-      _loadUserRole();
-    } else {
-      _isLoading = false;
+  Future<void> _checkExistingSession() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Verificar si hay sesión activa en Supabase
+      final session = Supabase.instance.client.auth.currentSession;
+
+      if (session != null) {
+        // Hay sesión activa, obtener rol del usuario
+        final userId = session.user.id;
+        DatabaseService.setCurrentUserId(userId);
+
+        final profile = await DatabaseService.getCurrentUserProfile();
+        final role = profile?['rol'] as String?;
+
+        if (mounted) {
+          setState(() {
+            _userRole = role;
+            _isLoggedIn = true;
+            _isLoading = false;
+          });
+        }
+      } else {
+        // No hay sesión
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isLoggedIn = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error al verificar sesión: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoggedIn = false;
+        });
+      }
     }
   }
 
-  void _setupAuthListener() {
-    Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
-      final event = data.event;
-      final session = data.session;
-
-      if (event == AuthChangeEvent.passwordRecovery) {
-        setState(() => _showResetPassword = true);
-        return;
-      }
-
-      if (event == AuthChangeEvent.signedIn && session?.user != null) {
-        if (mounted) {
-          setState(() => _isLoading = true);
-        }
-
-        await OneSignalService.setUserId(session!.user.id);
-        await _loadUserRole();
-
-        if (_userRole != null) {
-          await OneSignalService.setUserTags({'rol': _userRole!});
-        }
-
-        isManualLogin = false;
-      }
-
-      if (event == AuthChangeEvent.signedOut) {
-        await OneSignalService.removeUserId();
-        _userRole = null;
-        _isLoading = true;
-        if (mounted) setState(() {});
-      }
-    });
+  Future<void> _handleLoginSuccess(String role) async {
+    // El login real ya se hizo en LoginScreen con Supabase
+    // Solo actualizamos el estado local
+    if (mounted) {
+      setState(() {
+        _userRole = role;
+        _isLoggedIn = true;
+      });
+    }
   }
 
-  Future<void> _loadUserRole() async {
-  final user = Supabase.instance.client.auth.currentUser;
-  if (user == null) {
-    if (mounted) setState(() => _isLoading = false);
-    return;
-  }
+  Future<void> _handleLogout() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+      DatabaseService.setCurrentUserId(null);
 
-  try {
-    debugPrint('AUTH UID: ${user.id}');
-    debugPrint('EMAIL: ${user.email}');
-
-    final response = await Supabase.instance.client
-        .from('users')
-        .select('rol')
-        .eq('id', user.id)
-        .maybeSingle();
-
-    debugPrint('RESPUESTA USERS: $response');
-
-    if (response == null) {
-      debugPrint('❌ No existe fila en users para este UID');
       if (mounted) {
         setState(() {
           _userRole = null;
-          _isLoading = false;
+          _isLoggedIn = false;
         });
       }
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        _userRole = response['rol'];
-        _isLoading = false;
-      });
-    }
-  } catch (e, st) {
-    debugPrint('ERROR cargando rol: $e');
-    debugPrint('$st');
-
-    if (mounted) {
-      setState(() => _isLoading = false);
+    } catch (e) {
+      debugPrint('Error al cerrar sesión: $e');
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -207,15 +404,19 @@ class _AuthGateState extends State<AuthGate> {
       return const ResetPasswordScreen();
     }
 
-    final session = Supabase.instance.client.auth.currentSession;
-
-    if (session == null) {
+    // Si no hay sesión, mostrar pantalla de login
+    if (!_isLoggedIn) {
       final msg = pendingConfirmationMessage;
       pendingConfirmationMessage = null;
-      return LoginScreen(confirmationMessage: msg);
+      return LoginScreen(
+        confirmationMessage: msg,
+        onLoginSuccess: (String role) {
+          _handleLoginSuccess(role);
+        },
+      );
     }
 
-    // Mostrar loading mientras se carga el rol
+    // Mostrar loading mientras se carga
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Color(0xFFF4EBD3),
@@ -225,28 +426,28 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
+    // Si no hay rol definido, mostrar loading
     if (_userRole == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final rol = _userRole!;
 
+    // Navegar según el rol
     if (rol == 'admin') {
-      return const AdminDashboardPage();
+      return AdminDashboardPage(onLogout: _handleLogout);
     } else if (rol == 'tecnico') {
-      return const TechnicianDashboard();
+      return TechnicianDashboard(onLogout: _handleLogout);
     } else {
-      return const ClientDashboard();
+      return ClientDashboard(onLogout: _handleLogout);
     }
   }
 }
 
 class ClientDashboard extends StatefulWidget {
-  const ClientDashboard({super.key});
+  final VoidCallback onLogout;
+
+  const ClientDashboard({super.key, required this.onLogout});
 
   @override
   State<ClientDashboard> createState() => _ClientDashboardState();
@@ -255,17 +456,30 @@ class ClientDashboard extends StatefulWidget {
 class _ClientDashboardState extends State<ClientDashboard> {
   bool _checkingPermission = true;
   bool _showPermissionPage = false;
+  String _userName = 'Usuario';
 
   @override
   void initState() {
     super.initState();
     _checkLocationPermission();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    // TODO: Cargar datos del usuario desde el nuevo backend
+    final profile = await DatabaseService.getCurrentUserProfile();
+    if (profile != null && mounted) {
+      setState(() {
+        _userName = profile['nombre_completo'] ?? 'Usuario';
+      });
+    }
   }
 
   Future<void> _checkLocationPermission() async {
     final prefs = await SharedPreferences.getInstance();
-    final hasAskedPermission = prefs.getBool('location_permission_asked') ?? false;
-    
+    final hasAskedPermission =
+        prefs.getBool('location_permission_asked') ?? false;
+
     if (!hasAskedPermission) {
       if (mounted) {
         setState(() {
@@ -322,16 +536,15 @@ class _ClientDashboardState extends State<ClientDashboard> {
       );
     }
 
-    final user = Supabase.instance.client.auth.currentUser;
-    final metadata = user?.userMetadata;
-    final nombre = metadata?['nombre_completo'] ?? 'Usuario';
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4EBD3),
       appBar: AppBar(
         title: const Text(
           'ClickFix',
-          style: TextStyle(fontFamily: 'Montserrat', fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontFamily: 'Montserrat',
+            fontWeight: FontWeight.bold,
+          ),
         ),
         backgroundColor: const Color(0xFF555879),
         actions: [
@@ -341,9 +554,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
-            },
+            onPressed: widget.onLogout,
           ),
         ],
       ),
@@ -365,7 +576,11 @@ class _ClientDashboardState extends State<ClientDashboard> {
                   const CircleAvatar(
                     radius: 30,
                     backgroundColor: Colors.white,
-                    child: Icon(Icons.person, size: 35, color: Color(0xFF555879)),
+                    child: Icon(
+                      Icons.person,
+                      size: 35,
+                      color: Color(0xFF555879),
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -373,7 +588,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Hola, $nombre!',
+                          'Hola, $_userName!',
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -383,7 +598,10 @@ class _ClientDashboardState extends State<ClientDashboard> {
                         ),
                         const Text(
                           'Que necesitas reparar hoy?',
-                          style: TextStyle(color: Colors.white70, fontFamily: 'Montserrat'),
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontFamily: 'Montserrat',
+                          ),
                         ),
                       ],
                     ),
@@ -448,7 +666,8 @@ class _ClientDashboardState extends State<ClientDashboard> {
     );
   }
 
-  Widget _buildMenuCard(BuildContext context, {
+  Widget _buildMenuCard(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String subtitle,
@@ -515,21 +734,58 @@ class _ClientDashboardState extends State<ClientDashboard> {
   }
 }
 
-class TechnicianDashboard extends StatelessWidget {
-  const TechnicianDashboard({super.key});
+class TechnicianDashboard extends StatefulWidget {
+  final VoidCallback onLogout;
+
+  const TechnicianDashboard({super.key, required this.onLogout});
+
+  @override
+  State<TechnicianDashboard> createState() => _TechnicianDashboardState();
+}
+
+class _TechnicianDashboardState extends State<TechnicianDashboard>
+    with SingleTickerProviderStateMixin {
+  String _userName = 'Tecnico';
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _animationController.forward();
+    _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUserData() async {
+    // TODO: Cargar datos del técnico desde el nuevo backend
+    final profile = await DatabaseService.getCurrentUserProfile();
+    if (profile != null && mounted) {
+      setState(() {
+        _userName = profile['nombre_completo'] ?? 'Tecnico';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-    final metadata = user?.userMetadata;
-    final nombre = metadata?['nombre_completo'] ?? 'Tecnico';
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4EBD3),
       appBar: AppBar(
         title: const Text(
           'ClickFix Tecnico',
-          style: TextStyle(fontFamily: 'Montserrat', fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontFamily: 'Montserrat',
+            fontWeight: FontWeight.bold,
+          ),
         ),
         backgroundColor: const Color(0xFF555879),
         actions: [
@@ -539,9 +795,7 @@ class TechnicianDashboard extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
-            },
+            onPressed: widget.onLogout,
           ),
         ],
       ),
@@ -550,53 +804,67 @@ class TechnicianDashboard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF555879), Color(0xFF98A1BC)],
+            FadeScaleAnimation(
+              duration: const Duration(milliseconds: 600),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF555879), Color(0xFF98A1BC)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.engineering, size: 35, color: Color(0xFF555879)),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hola, $nombre!',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontFamily: 'Montserrat',
-                          ),
-                        ),
-                        const Text(
-                          'Panel de tecnico',
-                          style: TextStyle(color: Colors.white70, fontFamily: 'Montserrat'),
-                        ),
-                      ],
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Colors.white,
+                      child: Icon(
+                        Icons.engineering,
+                        size: 35,
+                        color: Color(0xFF555879),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Hola, $_userName!',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontFamily: 'Montserrat',
+                            ),
+                          ),
+                          const Text(
+                            'Panel de tecnico',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontFamily: 'Montserrat',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Buscar trabajo',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF555879),
-                fontFamily: 'Montserrat',
+            SlideFadeAnimation(
+              delay: const Duration(milliseconds: 200),
+              offset: const Offset(-0.2, 0),
+              child: const Text(
+                'Buscar trabajo',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF555879),
+                  fontFamily: 'Montserrat',
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -607,6 +875,16 @@ class TechnicianDashboard extends StatelessWidget {
               subtitle: 'Encuentra nuevos trabajos',
               route: '/availableRequests',
               color: const Color(0xFF27AE60),
+              index: 0,
+            ),
+            _buildMenuCard(
+              context,
+              icon: Icons.map,
+              title: 'Mapa de Clientes',
+              subtitle: 'Ver ubicación de clientes activos',
+              route: '/clientsMap',
+              color: const Color(0xFF16A085),
+              index: 1,
             ),
             _buildMenuCard(
               context,
@@ -615,15 +893,20 @@ class TechnicianDashboard extends StatelessWidget {
               subtitle: 'Cotizaciones enviadas',
               route: '/myQuotations',
               color: const Color(0xFF3498DB),
+              index: 2,
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Mis servicios',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF555879),
-                fontFamily: 'Montserrat',
+            SlideFadeAnimation(
+              delay: const Duration(milliseconds: 500),
+              offset: const Offset(-0.2, 0),
+              child: const Text(
+                'Mis servicios',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF555879),
+                  fontFamily: 'Montserrat',
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -634,6 +917,7 @@ class TechnicianDashboard extends StatelessWidget {
               subtitle: 'Trabajos pendientes',
               route: '/assignedServices',
               color: const Color(0xFFF39C12),
+              index: 3,
             ),
             _buildMenuCard(
               context,
@@ -642,15 +926,20 @@ class TechnicianDashboard extends StatelessWidget {
               subtitle: 'Ver calificaciones recibidas',
               route: '/receivedReviews',
               color: const Color(0xFF9B59B6),
+              index: 4,
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Mi perfil',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF555879),
-                fontFamily: 'Montserrat',
+            SlideFadeAnimation(
+              delay: const Duration(milliseconds: 700),
+              offset: const Offset(-0.2, 0),
+              child: const Text(
+                'Mi perfil',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF555879),
+                  fontFamily: 'Montserrat',
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -661,6 +950,7 @@ class TechnicianDashboard extends StatelessWidget {
               subtitle: 'Editar datos profesionales',
               route: '/technicianProfile',
               color: const Color(0xFF555879),
+              index: 5,
             ),
             _buildMenuCard(
               context,
@@ -669,6 +959,7 @@ class TechnicianDashboard extends StatelessWidget {
               subtitle: 'Gestionar especialidades',
               route: '/technicianSpecialties',
               color: const Color(0xFF1ABC9C),
+              index: 6,
             ),
             _buildMenuCard(
               context,
@@ -677,6 +968,7 @@ class TechnicianDashboard extends StatelessWidget {
               subtitle: 'Subir certificaciones',
               route: '/technicianCertificates',
               color: const Color(0xFFE74C3C),
+              index: 7,
             ),
           ],
         ),
@@ -684,65 +976,75 @@ class TechnicianDashboard extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuCard(BuildContext context, {
+  Widget _buildMenuCard(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String subtitle,
     required String route,
     required Color color,
+    required int index,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: () => Navigator.pushNamed(context, route),
+    return SlideFadeAnimation(
+      delay: Duration(milliseconds: 300 + (index * 50)),
+      offset: const Offset(0.3, 0),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Material(
+          color: Colors.white.withOpacity(0.85),
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF98A1BC)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: color, size: 28),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Color(0xFF555879),
-                          fontFamily: 'Montserrat',
-                        ),
+          elevation: 2,
+          child: InkWell(
+            onTap: () => Navigator.pushNamed(context, route),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF98A1BC)),
+              ),
+              child: Row(
+                children: [
+                  Hero(
+                    tag: 'icon_$route',
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF98A1BC),
-                          fontFamily: 'Montserrat',
-                        ),
-                      ),
-                    ],
+                      child: Icon(icon, color: color, size: 28),
+                    ),
                   ),
-                ),
-                const Icon(Icons.chevron_right, color: Color(0xFF98A1BC)),
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Color(0xFF555879),
+                            fontFamily: 'Montserrat',
+                          ),
+                        ),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF98A1BC),
+                            fontFamily: 'Montserrat',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Color(0xFF98A1BC)),
+                ],
+              ),
             ),
           ),
         ),

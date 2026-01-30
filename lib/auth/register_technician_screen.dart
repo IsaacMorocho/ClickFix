@@ -42,6 +42,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
   bool _hasSymbol = false;
   bool _showPasswordStrength = false;
   bool _loading = false;
+  bool _acceptedTerms = false;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -53,10 +54,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-    _fadeAnim = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeIn,
-    );
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _passwordCtrl.addListener(() {
       _onPasswordChanged(_passwordCtrl.text);
     });
@@ -174,6 +172,11 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
     if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
 
+    if (!_acceptedTerms) {
+      _showError('Debes aceptar los términos y condiciones para continuar');
+      return;
+    }
+
     final experience = int.tryParse(_experienceCtrl.text.trim());
     final rate = double.tryParse(_rateCtrl.text.trim());
 
@@ -274,11 +277,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
           key: _formKey,
           child: Column(
             children: [
-              const Icon(
-                Icons.build,
-                size: 60,
-                color: AppColors.primary,
-              ),
+              const Icon(Icons.build, size: 60, color: AppColors.primary),
               const SizedBox(height: 16),
               const Text(
                 'Registro de Tecnico',
@@ -320,18 +319,12 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
                 child: PageView(
                   controller: _pageController,
                   physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildPage1(),
-                    _buildPage2(),
-                  ],
+                  children: [_buildPage1(), _buildPage2()],
                 ),
               ),
               const SizedBox(height: 16),
               if (_currentPage == 0)
-                AuthButton(
-                  text: 'Siguiente',
-                  onPressed: _nextPage,
-                )
+                AuthButton(text: 'Siguiente', onPressed: _nextPage)
               else
                 Row(
                   children: [
@@ -430,10 +423,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
               ),
             ),
             TweenAnimationBuilder<double>(
-              tween: Tween<double>(
-                begin: 0,
-                end: _passwordStrength,
-              ),
+              tween: Tween<double>(begin: 0, end: _passwordStrength),
               duration: const Duration(milliseconds: 300),
               builder: (context, value, _) {
                 return LinearProgressIndicator(
@@ -452,10 +442,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
                   text: 'Minimo 6 caracteres',
                   checked: _hasMinLength,
                 ),
-                _PasswordCheck(
-                  text: 'Contiene un numero',
-                  checked: _hasNumber,
-                ),
+                _PasswordCheck(text: 'Contiene un numero', checked: _hasNumber),
                 _PasswordCheck(
                   text: 'Contiene un simbolo',
                   checked: _hasSymbol,
@@ -534,6 +521,86 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
             },
           ),
           const SizedBox(height: 16),
+
+          // Términos y condiciones para técnicos
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Normas de uso importante',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '• No se permite contactar a clientes fuera de la aplicación para realizar trabajos.',
+                  style: TextStyle(fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '• Todos los servicios deben coordinarse exclusivamente a través de ClickFix.',
+                  style: TextStyle(fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '• Contactar clientes por fuera puede resultar en la suspensión de tu cuenta.',
+                  style: TextStyle(fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '• Debes cumplir con los estándares de calidad y puntualidad acordados.',
+                  style: TextStyle(fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () {
+                    setState(() => _acceptedTerms = !_acceptedTerms);
+                  },
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: Checkbox(
+                          value: _acceptedTerms,
+                          onChanged: (value) {
+                            setState(() => _acceptedTerms = value ?? false);
+                          },
+                          activeColor: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'He leído y acepto estas normas de uso',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -548,10 +615,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen>
                 Expanded(
                   child: Text(
                     'Despues del registro, un administrador revisara tu perfil y certificados antes de aprobar tu cuenta.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textDark,
-                    ),
+                    style: TextStyle(fontSize: 13, color: AppColors.textDark),
                   ),
                 ),
               ],
@@ -567,10 +631,7 @@ class _StepIndicator extends StatelessWidget {
   final bool isActive;
   final int step;
 
-  const _StepIndicator({
-    required this.isActive,
-    required this.step,
-  });
+  const _StepIndicator({required this.isActive, required this.step});
 
   @override
   Widget build(BuildContext context) {
@@ -578,7 +639,9 @@ class _StepIndicator extends StatelessWidget {
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-        color: isActive ? AppColors.primary : AppColors.secondary.withOpacity(0.3),
+        color: isActive
+            ? AppColors.primary
+            : AppColors.secondary.withOpacity(0.3),
         shape: BoxShape.circle,
       ),
       child: Center(
@@ -598,10 +661,7 @@ class _PasswordCheck extends StatelessWidget {
   final String text;
   final bool checked;
 
-  const _PasswordCheck({
-    required this.text,
-    required this.checked,
-  });
+  const _PasswordCheck({required this.text, required this.checked});
 
   @override
   Widget build(BuildContext context) {
